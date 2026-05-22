@@ -21,7 +21,7 @@ npm install -g syncast-cli
 Optional: install this skill for Cursor / compatible agents:
 
 ```shell
-npx skills add latentcat/syncast-cli-skill --skill syncast-cli -y
+npx skills add latentcat/syncast-skills --skill syncast-cli -y
 ```
 
 ## Step 2: Log in
@@ -108,7 +108,7 @@ Credentials: `~/.syncast/config.json`
 
 Environment:
 
-- `SYNCAST_API_URL` or `API_URL` — API base URL (default `http://localhost:8901`)
+- `SYNCAST_API_URL` or `API_URL` — API base URL (default `https://dev-syncast-service.latentnet.com`)
 
 ## Agent workflow summary
 
