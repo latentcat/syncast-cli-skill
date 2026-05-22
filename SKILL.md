@@ -21,7 +21,7 @@ npm install -g syncast
 Optional: install this skill for Cursor / compatible agents:
 
 ```shell
-npx skills add <your-syncast-skills-repo-url> --skill syncast-cli -y
+npx skills add https://github.com/latentcat/syncast-cli-skill -y
 ```
 
 ## Step 2: Log in
