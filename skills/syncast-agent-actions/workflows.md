@@ -1,0 +1,292 @@
+# Syncast Agent Action 工作流
+
+## 平台创作路线
+
+外部 Agent 接手 Syncast 项目时，应先把项目理解成一个创作工作台，而不是单个对话框。典型创作路线是：
+
+1. 明确项目目标和交付物。
+2. 建立或读取项目规范、剧本、角色设定、分镜说明。
+3. 检查资源库中的参考图、视频、音频和生成结果。
+4. 查看画布是否已有视觉结构、参考关系或分镜。
+5. 查看时间轴是否已有剪辑结构。
+6. 再决定是否委托内部 Agent、发起 Imagine 生成、运行工作流或编辑项目内容。
+
+更完整的平台说明见 [platform-guide.md](platform-guide.md)。
+
+## 接手模式判断
+
+每次开始都先判断项目状态：
+
+- 空项目：缺文档、资源、时间轴或明确规范。先和用户讨论项目类型，再让内部 Agent 创建项目规范。
+- 进行中项目：已有文档、资源、画布、时间轴或频道消息。先读现有内容，避免重复创建和重复生成。
+
+随后判断模式：
+
+- 协作创作：外部 Agent 和用户一起决策，高频汇报与确认，适合探索项目方向。
+- 完全托管：用户已授权外部 Agent 在目标和预算内推进，适合明确任务。托管也要记录操作、校验引用、控制成本并阶段性汇报。
+
+不明确时默认“协作创作”。
+
+## Channel 规划
+
+所有右侧 Imagine Panel / Agent Panel 里的 Channel 用户都能看到。为了让用户容易回看，外部 Agent 不要每个任务都新建 Channel。
+
+推荐少量稳定 Channel：
+
+- 项目规划：项目目标、规范、总体路线。
+- 角色设定：角色资料、参考图、固定提示词。
+- 场景设定：空间、光线、氛围、场景参考。
+- 分镜与镜头：剧本、镜头、运镜、转场、多镜头片段。
+- 生成实验：图片/视频生成尝试、失败原因、改进记录。
+- 时间轴 Slot：待生成镜头块、关键帧和用户手动生成入口。
+
+同一主题的连续任务复用同一个 Channel；只有没有合适 Channel 时才创建。
+
+## 检查项目
+
+```ts
+await window.__syncastAgent.initialize({
+  name: "Project Operator Agent",
+  description: "负责检查项目、委托内部 Agent，并验收生成结果。",
+  emojiAvatar: "🤖",
+});
+
+const overview = await window.__syncastAgent.run("syncast.project.inspect", {
+  limit: 20
+});
+```
+
+在决定下一步之前先调用它。返回内容足够外部 Agent 选择频道、检查资源、发现运行中的任务、了解积分概况并读取文档。
+
+检查后先判断缺口：
+
+- 缺项目规范：优先委托内部 Agent 或创建文档。
+- 缺参考素材：优先检查资源文件夹或询问用户是否上传。
+- 缺视觉结构：可查看画布并规划分镜/参考关系。
+- 缺剪辑结构：可查看时间轴并判断是否需要先生成素材。
+- 有运行中任务：先等待或读取通知，不要重复发起。
+
+## 使用内部 Agent
+
+外部 Agent 无法直接访问 Syncast 内部 Skill。剧本设计、视频创作、提示词生成、模型参数理解、工具调用建议等，应该高频询问或委托内部 Agent。
+
+```ts
+const started = await window.__syncastAgent.run("syncast.agent.delegate", {
+  goal: [
+    "请基于当前项目状态，帮我创建适合短视频项目的项目规范。",
+    "请把规范拆成：整体风格、角色、场景、分镜计划、常用提示词。",
+    "请尽量写入项目文档，方便后续通过 @ 文档或章节引用。"
+  ].join("\n"),
+  channel: { purpose: "project-planning", type: "chat", createIfMissing: true },
+  wait: false,
+  notify: true
+});
+```
+
+不要把所有工作都塞进一个内部 Agent 对话。按项目规划、角色、场景、镜头、生成实验等主题拆开，避免上下文过长。
+
+## 委托内部 Agent
+
+```ts
+const started = await window.__syncastAgent.run("syncast.agent.delegate", {
+  goal: "请基于当前项目资源生成一个视频项目方案，并写入项目文档。",
+  channel: { purpose: "project-planning", type: "chat" },
+  wait: false,
+  notify: true
+});
+```
+
+默认情况下，`syncast.agent.delegate` 会使用专用自动化频道，不会把任务发进用户当前正在看的人工频道，也不会携带整段频道历史。只有要延续某个明确频道上下文时，才传 `channelId/channelTitle` 和 `includeHistory: true`。
+
+然后等待：
+
+```ts
+const done = await window.__syncastAgent.wait(started.data.ref, {
+  timeoutMs: 30 * 60 * 1000,
+  returnResult: true
+});
+```
+
+读取生成的文档：
+
+```ts
+await window.__syncastAgent.run("syncast.docs.readForAgent", {
+  changedSince: started.data.ref.startedAt
+});
+```
+
+`syncast.docs.readForAgent` 返回的是 canonical `docRead` 结构；后续读取章节正文时使用 `outline` 中的真实 `sectionId`，继续分页使用 `nextCursor`，重复上下文去重使用 `content.contextKey` / `loadedContextKeys`。
+
+## 校验 @ 引用
+
+发起图片/视频生成前，先解析资产引用。支持的常用文本格式：
+
+```text
+@{asset:<assetId>}
+@{doc:<docId>|<displayName>}
+@{doc-section:<docId>:<sectionId>|<displayName>}
+```
+
+资产引用校验：
+
+```ts
+const refs = await window.__syncastAgent.run("syncast.assets.resolveReferences", {
+  references: ["主角参考图", { assetId: "asset-id-from-assets-get" }]
+});
+```
+
+如果任何引用没有解析到真实 assetId，停止生成并向用户说明。不要带着错误 ID 发起图片或视频任务。
+
+## 发起 Imagine
+
+发起前建议先估算积分：
+
+```ts
+await window.__syncastAgent.run("syncast.imagine.estimateCredits", {
+  modelType: "nano-banana-2",
+  count: 2
+});
+```
+
+```ts
+const started = await window.__syncastAgent.run("syncast.imagine.submit", {
+  modelType: "nano-banana-2",
+  prompt: "请基于选中的项目资源生成一个电影感项目概念板。",
+  references: [{ name: "主视觉.png" }],
+  count: 2,
+  targetAssetName: "项目概念板A",
+  optimizePrompt: true,
+  wait: false
+});
+```
+
+等待完成：
+
+```ts
+await window.__syncastAgent.wait(started.data.ref, {
+  timeoutMs: 20 * 60 * 1000
+});
+```
+
+`targetAssetName` 是生成完成后写入资源库的资产名称，不会影响模型生成内容。批量生成时系统会自动追加序号。
+
+提交成功后检查返回值：
+
+```ts
+if (!started.data.validation?.ok) {
+  throw new Error("生成前校验未通过，不应继续。");
+}
+if (started.data.validation.leftoverTokens.length > 0) {
+  throw new Error("最终模型输入仍残留 @ 引用 token。");
+}
+```
+
+`submitted.modelPrompt` 是实际模型提示词文本，`submitted.finalModelInput` 是最终模型输入。外部 Agent 应用它们复查 `@` 是否都被解析/替换，而不是只看原始 prompt。
+
+模型建议：
+
+- 图片：优先 Nano Banana 2 或 OpenAI GPT Image 2；一般只使用 2K，质量使用 `auto`。
+- 视频：优先 SeedDance 2.0，默认 Fast 模式；SeedDance 2.0 / Fast 只允许 720P，禁止 1080P。
+- 除非用户明确要求，或内部 Agent 给出充分理由，不使用其它模型。
+
+视频生成策略：
+
+- 资产参考模式：为角色、场景和关键物件准备参考图，生成时 `@` 这些资产，并用文本描述剧情和动作。
+- 多镜头合成生成：使用 SeedDance 2.0 时，可以把多个镜头组织到一个 4 到 15 秒片段中，以获得更好一致性和更自然转场。
+
+## 排布时间轴 AI 占位 Slot
+
+如果用户希望先看到一组待生成镜头/角色块，再由人类逐个点击生成，使用 draft slot，不要直接批量扣费：
+
+```ts
+await window.__syncastAgent.run("syncast.timeline.generationSlots.createBatch", {
+  timelineName: "角色设定草案",
+  frameRate: 30,
+  slots: [
+    {
+      slotLabel: "S1",
+      title: "男主角",
+      prompt: "生成男主角角色设定图，半身，电影感。",
+      modelType: "nano-banana-2",
+      targetAssetName: "男主角A",
+      durationSeconds: 4
+    },
+    {
+      slotLabel: "S2",
+      title: "女主角",
+      prompt: "生成女主角角色设定图，半身，电影感。",
+      modelType: "nano-banana-2",
+      targetAssetName: "女主角A",
+      durationSeconds: 4
+    }
+  ]
+});
+```
+
+用户从 slot 手动生成时，会沿用 slot input 里的 `targetAssetName`；如果外部 Agent 已获得用户确认，也可以调用 `syncast.timeline.generationSlots.submit` 直接从某个 slot 发起生成。
+
+## 关键帧生成
+
+复杂镜头或场景变化建议先生成关键帧。关键帧需要严格命名和记录引用：
+
+- 命名示例：`镜头03_关键帧01_街角远景`、`镜头03_关键帧02_角色近景`。
+- 缓存每个关键帧对应的 assetId、场景位置、角色角度和参考来源。
+- 如果关键帧之间空间、角度或角色不一致，先修正关键帧，再生成视频。
+
+## 临时项目计划文件
+
+为了节省上下文，可以在本地维护临时计划文件，记录：
+
+- 操作记录和决策原因。
+- 资产名称到 assetId 的映射。
+- 文档 ID、章节 ID 和用途。
+- Channel 名称/ID、任务 ref、生成结果位置。
+
+正式项目规范、剧本、角色和场景内容仍应写入 Syncast 文档；本地文件只做外部 Agent 速查缓存。
+
+## 读取频道结果
+
+```ts
+await window.__syncastAgent.run("syncast.channel.messages.list", {
+  channelId: "channel-id",
+  limit: 20
+});
+```
+
+如果已知消息 ID：
+
+```ts
+await window.__syncastAgent.run("syncast.channel.message.get", {
+  channelId: "channel-id",
+  messageId: "message-id"
+});
+```
+
+## 超时后恢复
+
+如果等待调用超时，保留返回的 `ref` 或原始的 `started.data.ref`。
+
+```ts
+await window.__syncastAgent.run("syncast.notifications.list", {
+  filter: { ref: savedRef },
+  limit: 10
+});
+```
+
+如果暂时没有通知，稍后调用对应的 result action：
+
+```ts
+await window.__syncastAgent.run("syncast.agent.chat.result", {
+  ref: savedRef
+});
+```
+
+## 汇报给用户
+
+完成查看或任务后，不要只返回 action 的原始 JSON。应按项目创作语境汇报：
+
+- 当前项目处于哪个阶段。
+- 找到了哪些文档、资源、画布、时间轴或生成结果。
+- 内部 Agent 或 Imagine 产物在哪里。
+- 是否消耗了积分，或下一步是否可能消耗积分。
+- 下一步建议是什么，哪些需要用户确认。

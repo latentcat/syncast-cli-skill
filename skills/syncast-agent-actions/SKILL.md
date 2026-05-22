@@ -1,0 +1,151 @@
+---
+name: syncast-agent-actions
+description: 通过浏览器内 Agent Action Layer 操作已打开的 Syncast 项目。当外部 Agent 需要检查项目、委托 Syncast 内部 Agent、发起 Imagine 生成、排布时间轴 AI 占位 Slot、等待任务完成，或读取项目文档/资源/频道、获取资产远端下载链接时使用；禁止绕过前端或直接点击 UI。
+---
+
+# Syncast Agent Actions
+
+当你需要控制一个已经打开的 Syncast 网页项目时，使用这个 skill。
+
+外部 Agent 的角色是“像人类一样操作项目的使用者”。它应该先检查项目现场，再把业务工作委托给 Syncast 内部 Agent，等待任务完成，然后读取项目数据和产物。不要直接写 Loro，不要直接调用后端 Response API，也不要在 action bridge 可用时通过点击 UI 来完成自动化。
+
+## 平台理解
+
+Syncast 是一个本地优先、多人协作的 AI 创作工作台。一个项目通常包含文档、资源、画布、时间轴、AI / Agent 频道、工作流、录制和绘画等模块。
+
+外部 Agent 不应把 Syncast 当成单个聊天窗口，而应把它当成“项目创作操作系统”：
+
+1. 先看项目状态、同步状态、任务和积分。
+2. 判断当前项目是空项目，还是已有文档、资源、画布、时间轴、频道和任务历史的进行中项目。
+3. 判断用户希望“协作创作”还是“完全托管”；不明确时按协作创作处理。
+4. 再读文档和资源，理解项目规范、素材和已有产物。
+5. 然后判断是否需要画布组织、时间轴剪辑、Imagine 生成、工作流自动化或内部 Agent 协作。
+6. 对复杂业务任务，高频委托或询问内部 Agent；外部 Agent 负责理解人类意图、转交任务、等待、读取和验收。
+
+更完整的平台模块和创作路线见 [platform-guide.md](platform-guide.md)。执行实际任务前，先用这份指南判断当前项目处于哪个创作阶段。
+
+## 入口
+
+在浏览器项目页中调用：
+
+```ts
+await window.__syncastAgent.initialize({
+  name: "外部 Agent 名称",
+  description: "说明这个外部 Agent 负责的自动化范围。",
+  emojiAvatar: "🤖",
+});
+
+await window.__syncastAgent.run(actionName, input, options);
+```
+
+返回值统一使用：
+
+```ts
+{ ok: true, data: unknown } | { ok: false, error: { code, message, details? } }
+```
+
+## CLI Bridge 入口
+
+当外部 Agent 的浏览器工具不允许在页面上下文执行会产生副作用的 `evaluate` 时，不要绕过限制去注入任意 JS。改用 `syncast project-agent` 这条窄口 bridge。它只把结构化 action 请求转发给已打开项目页里的 `window.__syncastAgent`，不暴露通用浏览器控制台，也不替用户点击 UI。
+
+启动本地 bridge：
+
+```bash
+syncast project-agent serve
+```
+
+用 `serve` 输出的 `syncastAgentBridgeToken` 和 `syncastAgentBridgePort` 打开或刷新 Syncast 项目 URL。页面连接后确认：
+
+```bash
+syncast project-agent pages
+syncast project-agent capabilities
+```
+
+随后仍然按本 skill 选择 actionName / input / options，再通过 CLI 发送：
+
+```bash
+syncast project-agent run syncast.project.inspect --input '{"limit":20}'
+syncast project-agent run syncast.agent.delegate --input '{"goal":"请整理项目方案并写入项目文档。","wait":false}'
+syncast project-agent wait --ref '{"kind":"agent_chat","projectId":"..."}' --return-result
+syncast project-agent asset-download-urls --asset-id "asset-id"
+```
+
+这条路径的职责边界：
+
+- 本 skill 负责告诉外部 Agent 怎么理解 Syncast 项目、选择 action、组织 GraphQL / input。
+- `syncast project-agent` 只负责把请求送进当前浏览器项目页并返回统一 `{ ok, data/error }` 结果。
+- 用户继续操作 UI；外部 Agent 不通过 Playwright click/fill 操作业务 UI。
+- 如果当前环境允许原生、可写的 Playwright `page.evaluate`，也可以直接调用 `window.__syncastAgent.run`；如果工具声明 `evaluate` 只读，必须使用 CLI Bridge 或其它正式 bridge。
+
+## 默认流程
+
+1. 初始化身份并检查当前项目：
+
+```ts
+await window.__syncastAgent.initialize({
+  name: "Project Operator Agent",
+  description: "负责检查项目、委托内部 Agent，并验收生成结果。",
+  emojiAvatar: "🤖",
+});
+
+await window.__syncastAgent.run("syncast.project.inspect", {
+  limit: 20
+});
+```
+
+2. 结合 [platform-guide.md](platform-guide.md) 判断项目是空项目还是进行中项目，并确认“协作创作 / 完全托管”模式。
+
+3. 规划 Channel：复用少量稳定 Channel，不要每个任务都新建 Channel；按项目规划、角色设定、场景设定、分镜镜头、生成实验、时间轴 Slot 等主题组织。
+
+4. 把复杂业务工作委托给内部 Agent：
+
+```ts
+const started = await window.__syncastAgent.run("syncast.agent.delegate", {
+  goal: "请基于当前项目资源生成一个视频项目方案，并写入项目文档。",
+  wait: false,
+  notify: true
+});
+```
+
+5. 等待完成：
+
+```ts
+await window.__syncastAgent.wait(started.data.ref, {
+  timeoutMs: 30 * 60 * 1000,
+  returnResult: true
+});
+```
+
+6. 读取并验收结果：
+
+```ts
+await window.__syncastAgent.run("syncast.docs.readForAgent", {
+  changedSince: started.data.ref.startedAt
+});
+```
+
+## 规则
+
+- 项目方案、视频工作流、文档撰写、剧本设计、提示词生成、模型参数理解、时间轴 Slot 规划等任务，优先使用 `syncast.agent.delegate` 交给内部 Agent。
+- 外部 Agent 必须先调用 `window.__syncastAgent.initialize({ name, description?, emojiAvatar?, agentId? })` 初始化身份；首次加入会在项目成员中创建归属于当前登录用户的 Agent 身份，后续携带同一个 `agentId` 会认领并延续该身份。后续 action history 和由它发起的任务会记录这个外部操作者。内部 Agent 指的是 Syncast 内部 AI 对话执行者，不等同于外部 Agent。
+- `syncast.agent.delegate` 默认使用专用自动化频道，不使用当前人工频道，也不携带历史。只有明确要延续某个频道上下文时，才传 `channelId/channelTitle` 和 `includeHistory: true`。
+- 只有在需要精确读写项目数据，且不需要内部 Agent 业务推理时，才使用 `syncast.doc.graphql`。它是动态权限：query 是 read，mutation 会要求 edit 并落盘。
+- 读取文档优先用 `syncast.docs.readForAgent`，它返回 canonical `docRead` 结构；章节读取使用真实 `sectionId`，分页使用 `nextCursor`，去重使用 `contextKey/loadedContextKeys`。
+- GraphQL query/mutation 中的字段名必须使用 **camelCase**（如 `updatedAt`、`parentId`），不要用 Loro 内部的 snake_case（如 `updated_at`）。可先调用 `syncast.doc.graphql.explain` 获取正确示例。
+- 输入中引用资产和文档时，使用真实 ID 对应的 `@{asset:<assetId>}`、`@{doc:<docId>|<displayName>}`、`@{doc-section:<docId>:<sectionId>|<displayName>}`；发起图片/视频生成前必须用 `syncast.assets.resolveReferences` 等 action 校验引用。
+- 需要把项目资产交给外部 Agent 自行下载时，使用 `syncast.assets.downloadUrls` 或 CLI 便捷命令 `syncast project-agent asset-download-urls --asset-id ...` 获取临时签名 URL。Action 只返回链接和资产元数据，不在浏览器内下载文件；签名 URL 约 1 小时有效，外部 Agent 自行决定下载方式和保存位置。
+- 发起生成时使用 `syncast.imagine.submit`，它会走和手动 Imagine 面板一致的前端入队路径；需要指定生成完成后的资源名称时传 `targetAssetName`，一般开启 `optimizePrompt: true`。提交会内置生成前校验，返回 `validation` 和 `submitted.modelPrompt/finalModelInput`；如果 `validation.ok` 不为 true，或存在 `leftoverTokens/unresolvedMentions`，不得认为生成输入有效。
+- 图片模型优先 Nano Banana 2 / OpenAI GPT Image 2；图片生成一般只使用 2K，质量使用 `auto`，这是默认最佳组合。
+- 视频模型只推荐 SeedDance 2.0，除非用户明确要求，否则用 Fast 模式；SeedDance 2.0 / Fast 只允许使用 720P，禁止使用 1080P。
+- 要在时间轴上排一组待生成块时，使用 `syncast.timeline.generationSlots.createBatch` 创建 draft slots，让用户逐个手动触发；只有在用户明确确认扣费生成时才调用 `syncast.timeline.generationSlots.submit`。
+- 为节省上下文，可以建立本地临时项目计划文件缓存操作记录、资产名称与 ID、文档/章节 ID、Channel 和任务 ref；正式规范和剧本仍应写入 Syncast 项目文档。
+- 任何会消耗积分、写入项目、运行工作流或访问设备的动作，必须先向用户说明风险并获得确认。
+- 使用 `window.__syncastAgent.wait(ref)` 或 `syncast.notifications.list` 判断工作是否完成。
+- 如果 action 返回 `not_in_project` 或 `doc_loading`，请让用户打开 Syncast 项目页并等待加载完成。
+
+## 参考
+
+- 平台介绍与创作工作流：[platform-guide.md](platform-guide.md)
+- 完整 action 列表：[actions-reference.md](actions-reference.md)
+- 常见工作流：[workflows.md](workflows.md)
+- 异常处理：[troubleshooting.md](troubleshooting.md)
