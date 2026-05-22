@@ -15,7 +15,7 @@ Syncast CLI lets external agents call Syncast's image and video generation APIs 
 ## Step 1: Install
 
 ```shell
-npm install -g syncast
+npm install -g syncast-cli
 ```
 
 Optional: install this skill for Cursor / compatible agents:
