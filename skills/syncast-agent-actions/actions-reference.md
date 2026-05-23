@@ -243,6 +243,7 @@ await window.__syncastAgent.run("syncast.assets.downloadUrls", {
 | --- | --- | --- | --- | --- |
 | `syncast.imagine.models` | read | `{ disclosure?, category?, includeSchemas? }` | 渐进式模型披露 | 默认只看推荐模型；需要时再展开完整模型 |
 | `syncast.imagine.estimateCredits` | read | `{ modelType, params?, count? }` | 本地积分估算、当前余额、是否足够 | 发起生成前预估成本 |
+| `syncast.imagine.draftMarkdown` | read | `{ items: {"1": {model_type, prompt, ...}} }` 或 `{ drafts: [{ index?, title?, targetAssetName?, modelType?, prompt?, params?, input? }] }`；每项最终必须有 `model_type` 和 `prompt` | `markdown` + `items`，语言标记为 `imagine` | 给用户多个待生成方案，不创建任务、不扣费 |
 | `syncast.imagine.optimizePrompt` | read | `{ prompt, modelType, params?, references?, firstFrameAssetId?, lastFrameAssetId?, locale? }` | `{ optimizedPrompt, rawOptimizedPrompt, modelType }` | 复用人类前端“优化提示词”按钮链路 |
 | `syncast.imagine.submit` | edit | `{ modelType, prompt, params?, references?, count?, channelId?, targetAssetName?, optimizePrompt?, optimizePromptLocale?, sourceSlot?, wait?, timeoutMs? }` | `{ messageId, taskIds, ref, billingEstimate, validation, promptOptimization, submitted }`；等待时包含 notification/result | 可选先优化提示词，再通过现有前端 Imagine 入队路径发起生成 |
 | `syncast.imagine.submitToChannel` | edit | 同 `submit` | 同 `submit` | 明确表达“提交到解析后的频道” |
@@ -252,6 +253,19 @@ await window.__syncastAgent.run("syncast.assets.downloadUrls", {
 `syncast.imagine.models` 默认等价于 `{ disclosure: "recommended", category: "all", includeSchemas: true }`。推荐图片模型优先 `nano-banana-2` 和 `oai-gpt-image-2`；图片一般只使用 2K，质量使用 `auto`。推荐视频模型只推荐 SeedDance 2.0，默认 Fast 模式（当前为 `kittyvibe-seedance2.0fast`）；SeedDance 2.0 / Fast 只允许 720P，禁止 1080P。如果用户明确需要其它模型，再调用 `{ disclosure: "all", includeSchemas: false }` 查看其它模型名称；只有真正要使用某个非推荐模型时，才调用 `{ disclosure: "all", includeSchemas: true }` 获取完整 schema。
 
 积分估算来自前端本地定价表，真实扣费以后端 reserve / settle 为准。外部 Agent 在批量生成前应先调用 `syncast.billing.summary` 和 `syncast.imagine.estimateCredits`；`syncast.imagine.submit` 返回的 `billingEstimate` 可用于记录本次预计消耗。
+
+如果只是给用户建议、备选方案或需要用户确认，不要调用 `syncast.imagine.submit`。用 `syncast.imagine.draftMarkdown` 返回 Markdown，或自行输出同等格式；每个 item 必须包含非空 `model_type` 和 `prompt` / `prompt_raw`。引用资产优先写 `references: [{ "asset_id": "...", "reference_type": "image" }]`；兼容 `reference_assets` / `referenceAssetIds` 等旧别名，但不要编造 asset id：
+
+```imagine
+{
+  "1": {"asset_name": "角色方案 A", "model_type": "nano-banana-2", "prompt": "...", "references": [{"asset_id": "asset-id", "reference_type": "image"}]},
+  "2": {"asset_name": "角色方案 B", "model_type": "nano-banana-2", "prompt": "...", "references": [{"asset_id": "asset-id", "reference_type": "image"}]}
+}
+```
+
+这段内容在 Syncast Agent 记录中会显示为“待生成 Imagine 参数”控件，并展示引用到的参考素材。用户可以复制参数，也可以手动打开 Imagine 编辑器；在用户提交前不会生成、不会扣费。
+
+Seedance 2.0 待生成视频参数如果要使用首尾帧，优先写 `first_frame` / `last_frame`；如果沿用 Ark 兼容 `content[]`，媒体项必须包含真实 `asset_id` 和 `role: "first_frame"` / `"last_frame"`。Syncast 会把它导入到首尾帧模式；`role: "reference_image"` / `"reference_video"` / `"reference_audio"` 会导入到智能参考模式。
 
 提示词优化会复用前端的 `imagine_prompt_optimize` Response API 和白名单过滤逻辑。输入中的资产引用应使用内部 token 形式 `@{asset:<assetId>}`；如果外部 Agent 手里只有人类可读名称，先调用 `syncast.assets.resolveReferences` 解析成 assetId，再写入 prompt 或传入 `references`。优化结果会经过 sanitize：不允许模型新增未在原始 prompt / references / 首尾帧中的资产或文档 token。
 
