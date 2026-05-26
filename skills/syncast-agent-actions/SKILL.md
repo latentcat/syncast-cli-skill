@@ -138,7 +138,9 @@ await window.__syncastAgent.run("syncast.docs.readForAgent", {
 - 如果只是给用户多个生成建议、让用户挑选，或用户尚未确认扣费生成，不要调用 `syncast.imagine.submit`。使用 `syncast.imagine.draftMarkdown`，或在内部 Agent 回复中输出语言标记为 `imagine` 的 fenced code block；内容使用和 `imagine(items)` 完全相同的 JSON 对象，并确保每个 item 都有非空 `model_type` 和 `prompt` / `prompt_raw`。引用资产优先写 `references: [{ asset_id, reference_type }]`；兼容旧别名 `reference_assets` / `referenceAssetIds`，但不要编造 asset id。Syncast 会把它渲染成“待生成 Imagine 参数”控件，显示参考素材，用户可复制或手动打开 Imagine 编辑器。
 - Seedance 2.0 待生成视频参数如果要使用首帧/尾帧，优先写 `first_frame` / `last_frame`；兼容 `content[]` 时必须在媒体项里带真实 `asset_id` 和 `role: "first_frame"` / `"last_frame"`。Syncast 会导入到首尾帧模式；普通参考素材 `reference_image/video/audio` 会导入到智能参考模式。
 - 图片模型优先 Nano Banana 2 / OpenAI GPT Image 2；图片生成一般只使用 2K，质量使用 `auto`，这是默认最佳组合。
-- 视频模型只推荐 SeedDance 2.0，除非用户明确要求，否则用 Fast 模式；SeedDance 2.0 / Fast 只允许使用 720P，禁止使用 1080P。
+- 图片超分/修复模型在 `syncast.imagine.models` 的 `category: "upscale"` 中；`recraft-ai/recraft-crisp-upscale` 适合修复 Nano Banana Pro / GPT Image 2 多轮编辑后的鳞片、噪点、颗粒和崩坏质感，不需要 prompt。
+- 视频生成模型默认推荐 SeedDance 2.0，除非用户明确要求，否则用 Fast 模式；SeedDance 2.0 / Fast 只允许使用 720P，禁止使用 1080P。复杂动作、多主体、高运动量、怪兽或奇幻动作场景优先 `kittyvibe-seedance2.0global`；快速/低成本 Global 预览用 `kittyvibe-seedance2.0fastglobal`。
+- 视频超分/修复模型也在 `category: "upscale"` 中；`topaz/slp-2.5` 适合 AI 生成视频保真增强、去塑料感、提升人脸/材质/文字/logo 清晰度；`topaz/ast-2` 适合创意细节重建和 prompt 引导增强。Topaz 只用 `target_resolution: "1080p" | "4k"`；Astra 可额外传 `creativity`、`sharp`、`realism`、`prompt`。
 - 要在时间轴上排一组待生成块时，使用 `syncast.timeline.generationSlots.createBatch` 创建 draft slots，让用户逐个手动触发；只有在用户明确确认扣费生成时才调用 `syncast.timeline.generationSlots.submit`。
 - 为节省上下文，可以建立本地临时项目计划文件缓存操作记录、资产名称与 ID、文档/章节 ID、Channel 和任务 ref；正式规范和剧本仍应写入 Syncast 项目文档。
 - 任何会消耗积分、写入项目、运行工作流或访问设备的动作，必须先向用户说明风险并获得确认。

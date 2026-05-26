@@ -241,7 +241,7 @@ await window.__syncastAgent.run("syncast.assets.downloadUrls", {
 
 | Action | 权限 | 输入 | 输出 | 用途 |
 | --- | --- | --- | --- | --- |
-| `syncast.imagine.models` | read | `{ disclosure?, category?, includeSchemas? }` | 渐进式模型披露 | 默认只看推荐模型；需要时再展开完整模型 |
+| `syncast.imagine.models` | read | `{ disclosure?, category?, includeSchemas? }`，`category` 支持 `image` / `video` / `audio` / `upscale` / `all` | 渐进式模型披露 | 默认只看推荐模型；需要时再展开完整模型 |
 | `syncast.imagine.estimateCredits` | read | `{ modelType, params?, count? }` | 本地积分估算、当前余额、是否足够 | 发起生成前预估成本 |
 | `syncast.imagine.draftMarkdown` | read | `{ items: {"1": {model_type, prompt, ...}} }` 或 `{ drafts: [{ index?, title?, targetAssetName?, modelType?, prompt?, params?, input? }] }`；每项最终必须有 `model_type` 和 `prompt` | `markdown` + `items`，语言标记为 `imagine` | 给用户多个待生成方案，不创建任务、不扣费 |
 | `syncast.imagine.optimizePrompt` | read | `{ prompt, modelType, params?, references?, firstFrameAssetId?, lastFrameAssetId?, locale? }` | `{ optimizedPrompt, rawOptimizedPrompt, modelType }` | 复用人类前端“优化提示词”按钮链路 |
@@ -250,7 +250,7 @@ await window.__syncastAgent.run("syncast.assets.downloadUrls", {
 | `syncast.imagine.wait` | read | `{ ref, timeoutMs? }` | 完成/失败通知 | 等待生成完成 |
 | `syncast.imagine.result` | read | `{ ref }` | 生成消息摘要 | 读取生成结果 |
 
-`syncast.imagine.models` 默认等价于 `{ disclosure: "recommended", category: "all", includeSchemas: true }`。推荐图片模型优先 `nano-banana-2` 和 `oai-gpt-image-2`；图片一般只使用 2K，质量使用 `auto`。推荐视频模型只推荐 SeedDance 2.0，默认 Fast 模式（当前为 `kittyvibe-seedance2.0fast`）；SeedDance 2.0 / Fast 只允许 720P，禁止 1080P。如果用户明确需要其它模型，再调用 `{ disclosure: "all", includeSchemas: false }` 查看其它模型名称；只有真正要使用某个非推荐模型时，才调用 `{ disclosure: "all", includeSchemas: true }` 获取完整 schema。
+`syncast.imagine.models` 默认等价于 `{ disclosure: "recommended", category: "all", includeSchemas: true }`。推荐图片模型优先 `nano-banana-2` 和 `oai-gpt-image-2`；图片一般只使用 2K，质量使用 `auto`。推荐视频生成模型只推荐 SeedDance 2.0；常规生成使用 `kittyvibe-seedance2.0pro`，快速预览或低成本需求使用 `kittyvibe-seedance2.0fast`。复杂动作、多主体、高运动量、怪兽或奇幻动作场景推荐 `kittyvibe-seedance2.0global`；快速/低成本 Global 预览推荐 `kittyvibe-seedance2.0fastglobal`。SeedDance 2.0 / Fast 只允许 720P，禁止 1080P。图片和视频超分/修复模型归在 `category: "upscale"`：`recraft-ai/recraft-crisp-upscale` 适合修复 Nano Banana Pro、GPT Image 2 等模型多轮编辑后的鳞片、噪点、颗粒和崩坏质感；`topaz/slp-2.5` 适合 AI 生成视频保真增强、去塑料感、提升人脸/材质/文字/logo 清晰度；`topaz/ast-2` 适合创意细节重建和 prompt 引导增强，支持 `creativity`、`sharp`、`realism`、`prompt`。如果用户明确需要其它模型，再调用 `{ disclosure: "all", includeSchemas: false }` 查看其它模型名称；只有真正要使用某个非推荐模型时，才调用 `{ disclosure: "all", includeSchemas: true }` 获取完整 schema。
 
 积分估算来自前端本地定价表，真实扣费以后端 reserve / settle 为准。外部 Agent 在批量生成前应先调用 `syncast.billing.summary` 和 `syncast.imagine.estimateCredits`；`syncast.imagine.submit` 返回的 `billingEstimate` 可用于记录本次预计消耗。
 

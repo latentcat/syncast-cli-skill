@@ -86,12 +86,22 @@ syncast sync
 syncast start
 ```
 
-## Common models
+## Common direct CLI models
 
 | Media | Models |
 |-------|--------|
-| Image | `nano-banana-pro`, `nano-banana-2`, `seedream-4-5`, `gpt-image-2` |
-| Video | `veo-3-1`, `sora-2`, `seedance2.0pro`, `grok-video-3` |
+| Image | `nano-banana-2`, `nano-banana-pro`, `gpt-image-2`, `oai-gpt-image-2` |
+| Video | `kittyvibe-seedance2.0pro`, `kittyvibe-seedance2.0fast`, `kittyvibe-seedance2.0global`, `kittyvibe-seedance2.0fastglobal`, `veo-3-1`, `veo-3-1-fast`, `grok-video-3` |
+
+For complex motion, multi-subject, or action-heavy scenes, prefer the Seedance 2.0 Global route `kittyvibe-seedance2.0global`. Use `kittyvibe-seedance2.0fastglobal` for faster/lower-cost Global previews.
+
+## Project / Agent Action models
+
+These model IDs require project assets or richer Imagine payloads. Use Syncast Agent Actions, project Imagine drafts, or the app UI rather than a bare `syncast imagine` / `syncast video` command:
+
+For image cleanup after multi-round edits, use `recraft-ai/recraft-crisp-upscale`; it repairs noisy, scaly, grainy, or broken texture details without requiring a prompt.
+
+For video upscaling, use `topaz/slp-2.5` when the source is AI-generated or modern footage that should become more realistic while preserving structure. Use `topaz/ast-2` when the user wants creative detail reconstruction or prompt-guided stylization. Topaz video upscalers support `target_resolution` values `1080p` and `4k`; Astra also supports `creativity`, `sharp`, `realism`, and optional `prompt`.
 
 ## Troubleshooting
 
