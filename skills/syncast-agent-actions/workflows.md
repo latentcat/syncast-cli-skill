@@ -75,6 +75,7 @@ const started = await window.__syncastAgent.run("syncast.agent.delegate", {
   goal: [
     "请基于当前项目状态，帮我创建适合短视频项目的项目规范。",
     "请把规范拆成：整体风格、角色、场景、分镜计划、常用提示词。",
+    "如果项目方向是电影感 3D 动画或三维渲染二维感，请在风格规范中明确参考 `$cinematic-3d-animation`，并按该 Skill 写整体视觉原则、固定提示词骨架、正向词、反向控制和验收标准。",
     "请尽量写入项目文档，方便后续通过 @ 文档或章节引用。"
   ].join("\n"),
   channel: { purpose: "project-planning", type: "chat", createIfMissing: true },
