@@ -78,6 +78,91 @@ syncast task status <task_id>
 syncast task cancel <task_id>
 ```
 
+## Template management (admin only)
+
+All template commands require admin privileges. Non-admin users will receive a permission error.
+
+### List templates
+
+```shell
+# List all templates (including hidden), paginated
+syncast template list
+
+# Filter by category
+syncast template list --category image_prompt
+
+# Search by text
+syncast template list --search "steampunk"
+
+# Fetch all pages at once
+syncast template list --all
+```
+
+### List categories
+
+```shell
+syncast template categories
+```
+
+### Create a template
+
+```shell
+syncast template create \
+  --id "my-template-slug" \
+  --category image_prompt \
+  --title "My Template" \
+  --title-zh "我的模板" \
+  --description "A description" \
+  --content '{"prompt":"a cat on the moon","negative_prompt":"blurry"}' \
+  --tags "concept_art,fantasy" \
+  --thumbnail "https://example.com/thumb.jpg"
+```
+
+### Update a template (creates new version)
+
+```shell
+syncast template update \
+  --id "my-template-slug" \
+  --title "Updated Title" \
+  --tags "concept_art,sci-fi"
+```
+
+### Hide / unhide a template
+
+```shell
+# Soft-delete (hide)
+syncast template hide --id "my-template-slug"
+
+# Restore (unhide)
+syncast template hide --id "my-template-slug" --unhide
+```
+
+### View version history
+
+```shell
+syncast template revisions --id "my-template-slug"
+```
+
+### Bulk upload from JSON file
+
+```shell
+# Validate without uploading
+syncast template bulk-upload --file ./templates.json --dry-run
+
+# Upload (note: use --file, not -f which is reserved for --format)
+syncast template bulk-upload --file ./templates.json
+```
+
+The JSON file must be an array of objects with required fields `template_id`, `category`, `title` and optional fields `title_zh`, `description`, `description_zh`, `content`, `tags`, `thumbnail_url`.
+
+### Template categories
+
+| Category | Description |
+|----------|-------------|
+| `character` | Character templates (persona, appearance) |
+| `image_prompt` | Image generation prompt templates |
+| `agent_prompt` | Agent system prompt templates |
+
 ## Local file sync (legacy)
 
 ```shell
